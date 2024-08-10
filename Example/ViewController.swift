@@ -11,10 +11,6 @@ import UIKit
 class ViewController: UIViewController {
 
     var minimumSize: CGSize = CGSize(width: 60, height: 60)
-
-    var croppingParameters: CroppingParameters {
-        return CroppingParameters(isEnabled: croppingSwitch.isOn, allowResizing: resizableSwitch.isOn, allowMoving: movableSwitch.isOn, minimumSize: minimumSize)
-    }
     
     @IBOutlet weak var imageView: UIImageView!
     @IBOutlet weak var croppingParametersView: UIView!
@@ -32,20 +28,20 @@ class ViewController: UIViewController {
     }
     
     @IBAction func openCamera(_ sender: Any) {
-        let cameraViewController = CameraViewController(croppingParameters: croppingParameters, allowsLibraryAccess: librarySwitch.isOn) { [weak self] image, asset in
+        let cameraViewController = CameraViewController(allowsLibraryAccess: librarySwitch.isOn) { [weak self] image, asset in
             self?.imageView.image = image
             self?.dismiss(animated: true, completion: nil)
         }
-        
+        cameraViewController.modalPresentationStyle = .fullScreen
         present(cameraViewController, animated: true, completion: nil)
     }
     
     @IBAction func openLibrary(_ sender: Any) {
-        let libraryViewController = CameraViewController.imagePickerViewController(croppingParameters: croppingParameters) { [weak self] image, asset in
+        let libraryViewController = CameraViewController.imagePickerViewController() { [weak self] image, asset in
             self?.imageView.image = image
             self?.dismiss(animated: true, completion: nil)
         }
-        
+        libraryViewController.modalPresentationStyle = .fullScreen
         present(libraryViewController, animated: true, completion: nil)
     }
     

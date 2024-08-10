@@ -1,11 +1,3 @@
-//
-//  CameraView.swift
-//  ALCameraViewController
-//
-//  Created by Alex Littlejohn on 2015/06/17.
-//  Copyright (c) 2015 zero. All rights reserved.
-//
-
 import UIKit
 import AVFoundation
 
@@ -14,27 +6,27 @@ public class CameraView: UIView {
     var session: AVCaptureSession!
     var input: AVCaptureDeviceInput!
     var device: AVCaptureDevice!
-    var imageOutput: AVCaptureStillImageOutput!
+    var imageOutput: AVCapturePhotoOutput!
     var preview: AVCaptureVideoPreviewLayer!
     
     let cameraQueue = DispatchQueue(label: "com.zero.ALCameraViewController.Queue")
-
+    private var completion: ((UIImage?) -> Void)?
     public var currentPosition = CameraGlobals.shared.defaultCameraPosition
+    private var currentFlashMode: AVCaptureDevice.FlashMode = .off
     
     public func startSession() {
         session = AVCaptureSession()
         session.sessionPreset = AVCaptureSession.Preset.photo
 
         device = cameraWithPosition(position: currentPosition)
-        if let device = device , device.hasFlash {
+        if let device = device, device.hasFlash {
             do {
                 try device.lockForConfiguration()
-                device.flashMode = .auto
                 device.unlockForConfiguration()
-            } catch _ {}
+            } catch {
+                print("Error locking configuration: \(error)")
+            }
         }
-
-        let outputSettings = [AVVideoCodecKey: AVVideoCodecJPEG]
 
         do {
             input = try AVCaptureDeviceInput(device: device)
@@ -48,14 +40,17 @@ public class CameraView: UIView {
             session.addInput(input)
         }
 
-        imageOutput = AVCaptureStillImageOutput()
-        imageOutput.outputSettings = outputSettings
 
+        if session.canAddInput(input) {
+            session.addInput(input)
+        }
+
+        imageOutput = AVCapturePhotoOutput()
         session.addOutput(imageOutput)
 
-        cameraQueue.sync {
-            session.startRunning()
-            DispatchQueue.main.async() { [weak self] in
+        cameraQueue.sync { [weak self] in
+            self?.session.startRunning()
+            DispatchQueue.main.async { [weak self] in
                 self?.createPreview()
                 self?.rotatePreview()
             }
@@ -88,7 +83,6 @@ public class CameraView: UIView {
     @objc internal func pinch(gesture: UIPinchGestureRecognizer) {
         guard let device = device else { return }
 
-        // Return zoom value between the minimum and maximum zoom values
         func minMaxZoom(_ factor: CGFloat) -> CGFloat {
             return min(max(factor, 1.0), device.activeFormat.videoMaxZoomFactor)
         }
@@ -111,47 +105,45 @@ public class CameraView: UIView {
         switch gesture.state {
         case .began, .changed:
             update(scale: newScaleFactor)
-        case _:
+        default:
             break
         }
     }
     
     private func createPreview() {
-        
         preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        preview.videoGravity = .resizeAspectFill
         preview.frame = bounds
 
         layer.addSublayer(preview)
     }
     
     private func cameraWithPosition(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        let devices = AVCaptureDevice.devices(for: AVMediaType.video)
-        return devices.filter { $0.position == position }.first
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .builtInTelephotoCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        
+        return discoverySession.devices.first { $0.position == position }
     }
     
-    public func capturePhoto(completion: @escaping CameraShotCompletion) {
+    public func capturePhoto(completion: @escaping (UIImage?) -> Void) {
         isUserInteractionEnabled = false
-
-        guard let output = imageOutput, let orientation = AVCaptureVideoOrientation(rawValue: UIDevice.current.orientation.rawValue) else {
+        guard let photoOutput = imageOutput else {
             completion(nil)
             return
         }
 
-        let size = frame.size
-
-        cameraQueue.sync {
-            takePhoto(output, videoOrientation: orientation, cameraPosition: device.position, cropSize: size) { image in
-                DispatchQueue.main.async() { [weak self] in
-                    self?.isUserInteractionEnabled = true
-                    completion(image)
-                }
-            }
+        let photoSettings = AVCapturePhotoSettings()
+        if device.hasFlash {
+            photoSettings.flashMode = .auto
         }
+        self.completion = completion
+        photoOutput.capturePhoto(with: photoSettings, delegate:self)
     }
     
     public func focusCamera(toPoint: CGPoint) -> Bool {
-        
         guard let device = device, let preview = preview, device.isFocusModeSupported(.continuousAutoFocus) else {
             return false
         }
@@ -180,19 +172,23 @@ public class CameraView: UIView {
         
         do {
             try device.lockForConfiguration()
-            if device.flashMode == .on {
-                device.flashMode = .off
-            } else if device.flashMode == .off {
-                device.flashMode = .auto
-            } else {
-                device.flashMode = .on
+            switch currentFlashMode {
+            case .on:
+                currentFlashMode = .off
+            case .off:
+                currentFlashMode = .auto
+            case .auto:
+                currentFlashMode = .on
+            default:
+                currentFlashMode = .off
             }
             device.unlockForConfiguration()
-        } catch _ { }
+        } catch {
+            print("Error locking device for configuration: \(error.localizedDescription)")
+        }
     }
 
     public func swapCameraInput() {
-        
         guard let session = session, let currentInput = input else {
             return
         }
@@ -219,25 +215,41 @@ public class CameraView: UIView {
     }
   
     public func rotatePreview() {
-      
-        guard preview != nil else {
+        guard let preview = preview,
+              let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
             return
         }
-        switch UIApplication.shared.statusBarOrientation {
-            case .portrait:
-              preview?.connection?.videoOrientation = AVCaptureVideoOrientation.portrait
-              break
-            case .portraitUpsideDown:
-              preview?.connection?.videoOrientation = AVCaptureVideoOrientation.portraitUpsideDown
-              break
-            case .landscapeRight:
-              preview?.connection?.videoOrientation = AVCaptureVideoOrientation.landscapeRight
-              break
-            case .landscapeLeft:
-              preview?.connection?.videoOrientation = AVCaptureVideoOrientation.landscapeLeft
-              break
-            default: break
+        
+        let orientation = windowScene.interfaceOrientation
+        switch orientation {
+        case .portrait:
+            preview.connection?.videoOrientation = .portrait
+        case .portraitUpsideDown:
+            preview.connection?.videoOrientation = .portraitUpsideDown
+        case .landscapeRight:
+            preview.connection?.videoOrientation = .landscapeRight
+        case .landscapeLeft:
+            preview.connection?.videoOrientation = .landscapeLeft
+        default:
+            break
         }
     }
-    
+}
+
+extension CameraView: AVCapturePhotoCaptureDelegate {
+    public func photoOutput(_ output: AVCapturePhotoOutput,
+                       didFinishProcessingPhoto photo: AVCapturePhoto,
+                       error: Error?) {
+        guard error == nil,
+              let imageData = photo.fileDataRepresentation(),
+              let image = UIImage(data: imageData) else {
+            if let block = self.completion {
+                block(nil)
+            }
+            return
+        }
+        if let block = self.completion {
+            block(image)
+        }
+    }
 }

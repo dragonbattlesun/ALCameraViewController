@@ -98,6 +98,11 @@ public class PhotoLibraryViewController: UIViewController {
     internal func itemAtIndexPath(_ indexPath: IndexPath) -> PHAsset? {
         return assets?[(indexPath as NSIndexPath).row]
     }
+    
+    deinit {
+        print("=== talkme \(PhotoLibraryViewController.self) dealloc");
+    }
+    
 }
 
 // MARK: - UICollectionViewDataSource -

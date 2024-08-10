@@ -14,7 +14,7 @@ public typealias CameraViewCompletion = (UIImage?, PHAsset?) -> Void
 
 public extension CameraViewController {
     /// Provides an image picker wrapped inside a UINavigationController instance
-    class func imagePickerViewController(croppingParameters: CroppingParameters, completion: @escaping CameraViewCompletion) -> UINavigationController {
+    class func imagePickerViewController(completion: @escaping CameraViewCompletion) -> UINavigationController {
         let imagePicker = PhotoLibraryViewController()
         let navigationController = UINavigationController(rootViewController: imagePicker)
         
@@ -24,16 +24,16 @@ public extension CameraViewController {
 
         imagePicker.onSelectionComplete = { [weak imagePicker] asset in
             if let asset = asset {
-                let confirmController = ConfirmViewController(asset: asset, croppingParameters: croppingParameters)
-                confirmController.onComplete = { [weak imagePicker] image, asset in
-                    if let image = image, let asset = asset {
-                        completion(image, asset)
-                    } else {
-                        imagePicker?.dismiss(animated: true, completion: nil)
+                SingleImageFetcher()
+                    .setAsset(asset)
+                    .setTargetSize(largestPhotoSize())
+                    .onSuccess { image in
+                        completion(image,asset)
                     }
-                }
-                confirmController.modalTransitionStyle = UIModalTransitionStyle.crossDissolve
-                imagePicker?.present(confirmController, animated: true, completion: nil)
+                    .onFailure { error in
+                        completion(nil,asset)
+                    }
+                    .fetch()
             } else {
                 completion(nil, nil)
             }
@@ -46,7 +46,6 @@ public extension CameraViewController {
 open class CameraViewController: UIViewController {
     
     var didUpdateViews = false
-    var croppingParameters: CroppingParameters
     var animationRunning = false
     let allowVolumeButtonCapture: Bool
     
@@ -140,21 +139,27 @@ open class CameraViewController: UIViewController {
         return button
     }()
     
-    let containerSwapLibraryButton : UIView = {
+    let topMaskView : UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .black
         return view
     }()
-	
+    
+    let bottomMaskView : UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.backgroundColor = .black
+        return view
+    }()
+    
 	private let allowsLibraryAccess: Bool
   
-    public init(croppingParameters: CroppingParameters = CroppingParameters(),
-                allowsLibraryAccess: Bool = true,
+    public init(allowsLibraryAccess: Bool = true,
                 allowsSwapCameraOrientation: Bool = true,
                 allowVolumeButtonCapture: Bool = true,
                 completion: @escaping CameraViewCompletion) {
 
-        self.croppingParameters = croppingParameters
         self.allowsLibraryAccess = allowsLibraryAccess
         self.allowVolumeButtonCapture = allowVolumeButtonCapture
         super.init(nibName: nil, bundle: nil)
@@ -185,12 +190,20 @@ open class CameraViewController: UIViewController {
     open override func loadView() {
         super.loadView()
         view.backgroundColor = UIColor.black
-        [cameraView,
-            cameraButton,
-            closeButton,
-            flashButton,
-            containerSwapLibraryButton].forEach({ view.addSubview($0) })
-        [swapButton, libraryButton].forEach({ containerSwapLibraryButton.addSubview($0) })
+        view.addSubview(topMaskView)
+        view.addSubview(bottomMaskView)
+        view.addSubview(cameraView)
+        [closeButton,
+         flashButton].forEach({
+            topMaskView.addSubview($0)
+        })
+        
+        [libraryButton,
+         cameraButton,
+         swapButton].forEach({
+            bottomMaskView.addSubview($0)
+        })
+
         view.setNeedsUpdateConstraints()
     }
     
@@ -203,38 +216,28 @@ open class CameraViewController: UIViewController {
      * device is rotating, based on the device orientation.
      */
     override open func updateViewConstraints() {
-
+        removeTopMaskConstraints()
+        removeBottomMaskConstraints()
+        configTopMaskViewConstraint()
+        configBottomMaskConstraint()
         if !didUpdateViews {
             configCameraViewConstraints()
             didUpdateViews = true
         }
         
-        let statusBarOrientation = UIApplication.shared.statusBarOrientation
-        let portrait = statusBarOrientation.isPortrait
-        
-        configCameraButtonEdgeConstraint(statusBarOrientation)
-        configCameraButtonGravityConstraint(portrait)
         
         removeCloseButtonConstraints()
-        configCloseButtonEdgeConstraint(statusBarOrientation)
-        configCloseButtonGravityConstraint(statusBarOrientation)
-        
-        removeContainerConstraints()
-        configContainerEdgeConstraint(statusBarOrientation)
-        configContainerGravityConstraint(statusBarOrientation)
-        
-        removeSwapButtonConstraints()
-        configSwapButtonEdgeConstraint(statusBarOrientation)
-        configSwapButtonGravityConstraint(portrait)
+        configCloseButtonConstraint()
 
+        removeflashButtonConstraints()
+        configFlashButtonConstraint()
+
+        configCameraButtonConstraint()
+        
+        configSwapButtonConstraint()
         removeLibraryButtonConstraints()
-        configLibraryEdgeButtonConstraint(statusBarOrientation)
-        configLibraryGravityButtonConstraint(portrait)
         
-        configFlashEdgeButtonConstraint(statusBarOrientation)
-        configFlashGravityButtonConstraint(statusBarOrientation)
-
-        rotate(actualInterfaceOrientation: statusBarOrientation)
+        configLibraryButtonConstraint()
         
         super.updateViewConstraints()
     }
@@ -250,6 +253,7 @@ open class CameraViewController: UIViewController {
      */
     open override func viewDidLoad() {
         super.viewDidLoad()
+        self.view.backgroundColor = UIColor.white
         setupActions()
         checkPermissions()
         cameraView.configureZoom()
@@ -416,7 +420,7 @@ open class CameraViewController: UIViewController {
                 initialSpringVelocity: 0,
                 options: options,
                 animations: { [weak self] in
-                self?.setTransform(transform: transform)
+                    self?.setTransform(transform: transform)
                 }, completion: { [weak self] _ in
                     self?.animationRunning = false
             })
@@ -523,7 +527,7 @@ open class CameraViewController: UIViewController {
     }
     
     internal func showLibrary() {
-        let imagePicker = CameraViewController.imagePickerViewController(croppingParameters: croppingParameters) { [weak self] image, asset in
+        let imagePicker = CameraViewController.imagePickerViewController() { [weak self] image, asset in
             defer {
                 self?.cameraView.startSession()
                 self?.dismiss(animated: true, completion: nil)
@@ -573,46 +577,25 @@ open class CameraViewController: UIViewController {
     }
 	
 	private func startConfirmController(uiImage: UIImage) {
-		let confirmViewController = ConfirmViewController(image: uiImage, croppingParameters: croppingParameters)
-		confirmViewController.onComplete = { [weak self] image, asset in
-			defer {
-                self?.cameraView.startSession()
-				self?.dismiss(animated: true, completion: nil)
-			}
-			
-			guard let image = image else {
-				return
-			}
-			
-			self?.onCompletion?(image, asset)
-			self?.onCompletion = nil
-		}
-		confirmViewController.modalTransitionStyle = UIModalTransitionStyle.crossDissolve
-		present(confirmViewController, animated: true, completion: nil)
+        self.onCompletion?(uiImage, nil)
 	}
 	
     private func startConfirmController(asset: PHAsset) {
-        let confirmViewController = ConfirmViewController(asset: asset, croppingParameters: croppingParameters)
-        confirmViewController.onComplete = { [weak self] image, asset in
-            defer {
-                self?.cameraView.startSession()
-                self?.dismiss(animated: true, completion: nil)
+        SingleImageFetcher()
+            .setAsset(asset)
+            .setTargetSize(largestPhotoSize())
+            .onSuccess { [weak self] image in
+                self?.onCompletion?(image,asset)
             }
-
-            guard let image = image, let asset = asset else {
-                return
+            .onFailure { [weak self] error in
+                self?.onCompletion?(nil,asset)
             }
-
-            self?.onCompletion?(image, asset)
-            self?.onCompletion = nil
-        }
-        confirmViewController.modalTransitionStyle = UIModalTransitionStyle.crossDissolve
-        present(confirmViewController, animated: true, completion: nil)
+            .fetch()
     }
 
     private func showSpinner() -> UIActivityIndicatorView {
         let spinner = UIActivityIndicatorView()
-        spinner.style = .white
+        spinner.style = .medium
         spinner.center = view.center
         spinner.startAnimating()
         
@@ -625,6 +608,10 @@ open class CameraViewController: UIViewController {
     private func hideSpinner(_ spinner: UIActivityIndicatorView) {
         spinner.stopAnimating()
         spinner.removeFromSuperview()
+    }
+    
+    deinit {
+        print("=== talkme \(PhotoLibraryViewController.self) dealloc");
     }
     
 }
