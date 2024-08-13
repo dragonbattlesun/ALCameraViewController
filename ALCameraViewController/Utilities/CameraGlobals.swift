@@ -21,4 +21,5 @@ public class CameraGlobals {
     public var stringsTable = "CameraView"
     public var photoLibraryThumbnailSize = CGSize(width: thumbnailDimension, height: thumbnailDimension)
     public var defaultCameraPosition = AVCaptureDevice.Position.back
+
 }

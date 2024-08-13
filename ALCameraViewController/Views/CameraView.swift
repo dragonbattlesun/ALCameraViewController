@@ -9,7 +9,6 @@ public class CameraView: UIView {
     var imageOutput: AVCapturePhotoOutput!
     var preview: AVCaptureVideoPreviewLayer!
     
-    let cameraQueue = DispatchQueue(label: "com.zero.ALCameraViewController.Queue")
     private var completion: ((UIImage?) -> Void)?
     public var currentPosition = CameraGlobals.shared.defaultCameraPosition
     private var currentFlashMode: AVCaptureDevice.FlashMode = .off
@@ -48,26 +47,31 @@ public class CameraView: UIView {
         imageOutput = AVCapturePhotoOutput()
         session.addOutput(imageOutput)
 
-        cameraQueue.sync { [weak self] in
-            self?.session.startRunning()
-            DispatchQueue.main.async { [weak self] in
-                self?.createPreview()
-                self?.rotatePreview()
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            if let isRunning = self?.session?.isRunning {
+                if !isRunning {
+                    self?.session?.startRunning()
+                }
             }
         }
+        createPreview()
+        rotatePreview()
     }
     
     public func stopSession() {
-        cameraQueue.sync {
-            session?.stopRunning()
-            preview?.removeFromSuperlayer()
-            
-            session = nil
-            input = nil
-            imageOutput = nil
-            preview = nil
-            device = nil
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            if let isRunning = self?.session?.isRunning {
+                if isRunning {
+                    self?.session?.stopRunning()
+                    self?.session = nil
+                }
+            }
         }
+        preview?.removeFromSuperlayer()
+        input = nil
+        imageOutput = nil
+        preview = nil
+        device = nil
     }
     
     public override func layoutSubviews() {

@@ -52,7 +52,7 @@ internal class PermissionsView: UIView {
     
     func commonInit() {
         
-        backgroundColor = UIColor(white: 0.2, alpha: 1)
+        backgroundColor = UIColor.black
         
         titleLabel.textColor = UIColor.white
         titleLabel.numberOfLines = 0

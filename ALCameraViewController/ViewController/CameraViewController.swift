@@ -253,7 +253,7 @@ open class CameraViewController: UIViewController {
      */
     open override func viewDidLoad() {
         super.viewDidLoad()
-        self.view.backgroundColor = UIColor.white
+        self.view.backgroundColor = UIColor.black
         setupActions()
         checkPermissions()
         cameraView.configureZoom()
@@ -336,7 +336,9 @@ open class CameraViewController: UIViewController {
     }
     
     @objc internal func notifyCameraReady() {
-        cameraButton.isEnabled = true
+        DispatchQueue.main.async {[weak self] in
+            self?.cameraButton.isEnabled = true
+        }
     }
     
     /**

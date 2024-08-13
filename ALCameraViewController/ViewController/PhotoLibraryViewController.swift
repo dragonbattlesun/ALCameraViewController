@@ -85,7 +85,6 @@ public class PhotoLibraryViewController: UIViewController {
         let permissionsView = PermissionsView(frame: view.bounds)
         permissionsView.titleLabel.text = localizedString("permissions.library.title")
         permissionsView.descriptionLabel.text = localizedString("permissions.library.description")
-        
         view.addSubview(permissionsView)
     }
     
