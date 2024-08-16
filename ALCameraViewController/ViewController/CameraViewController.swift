@@ -534,12 +534,9 @@ public extension CameraViewController {
     
     internal func toggleFlash() {
         cameraView.cycleFlash()
-        
-        guard let device = cameraView.device else {
-            return
-        }
         let  flashMode = AVCapturePhotoSettings().flashMode
-        let image = UIImage(named: flashImage(flashMode),
+        print("flashMode \(flashMode)")
+        let image = UIImage(named: flashImage(cameraView.currentFlashMode),
                             in: CameraGlobals.shared.bundle,
                             compatibleWith: nil)
         

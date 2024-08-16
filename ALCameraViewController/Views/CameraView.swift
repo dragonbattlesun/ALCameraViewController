@@ -9,11 +9,11 @@ public class CameraView: UIView {
     var imageOutput: AVCapturePhotoOutput!
     var preview: AVCaptureVideoPreviewLayer!
     var startomCaptureCompletion: (() -> Void)?
+    var photoSettings: AVCapturePhotoSettings = AVCapturePhotoSettings()
+    var currentFlashMode: AVCaptureDevice.FlashMode = .off
     
     private var completion: ((UIImage?) -> Void)?
-
     public var currentPosition = CameraGlobals.shared.defaultCameraPosition
-    private var currentFlashMode: AVCaptureDevice.FlashMode = .off
     
     public func startSession() {
         session = AVCaptureSession()
@@ -146,11 +146,7 @@ public class CameraView: UIView {
             completion(nil)
             return
         }
-
-        let photoSettings = AVCapturePhotoSettings()
-        if device.hasFlash {
-            photoSettings.flashMode = .auto
-        }
+        photoSettings.flashMode = currentFlashMode
         self.completion = completion
         photoOutput.capturePhoto(with: photoSettings, delegate:self)
     }
@@ -182,7 +178,6 @@ public class CameraView: UIView {
             return
         }
         do {
-            try device.lockForConfiguration()
             switch currentFlashMode {
             case .on:
                 currentFlashMode = .off
@@ -193,8 +188,6 @@ public class CameraView: UIView {
             default:
                 currentFlashMode = .off
             }
-            AVCapturePhotoSettings().flashMode = currentFlashMode
-            device.unlockForConfiguration()
         } catch {
             print("Error locking device for configuration: \(error.localizedDescription)")
         }
