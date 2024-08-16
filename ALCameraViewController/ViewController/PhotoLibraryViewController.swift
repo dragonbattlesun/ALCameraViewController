@@ -39,8 +39,6 @@ public class PhotoLibraryViewController: UIViewController {
         view.backgroundColor = .black
         view.addSubview(collectionView)
         configCollectionViewConstraint()
-        PHPhotoLibrary.shared().register(self)
-        checkPhotoLibraryAuthorization()
         ImageFetcher()
             .onFailure(onFailure)
             .onSuccess(onSuccess)
@@ -111,26 +109,6 @@ public class PhotoLibraryViewController: UIViewController {
         navigationController.navigationBar.barTintColor = UIColor.black
         navigationController.navigationBar.barStyle = UIBarStyle.black
         inViewController.present(navigationController, animated: animated, completion: nil)
-    }
-    
-    func checkPhotoLibraryAuthorization() {
-        if #available(iOS 14, *) {
-            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            if status == .limited {
-                showPhotoPicker(from: self)
-            }
-        }
-    }
-    
-    @available(iOS 14, *)
-    func showPhotoPicker(from viewController: UIViewController) {
-        var config = PHPickerConfiguration(photoLibrary: PHPhotoLibrary.shared())
-        config.selectionLimit = 0 // Allows unlimited selection
-        config.filter = .images // Show only images
-
-        let picker = PHPickerViewController(configuration: config)
-        picker.delegate = viewController as? PHPickerViewControllerDelegate
-        viewController.present(picker, animated: true, completion: nil)
     }
     
     @objc public func dismissLibrary() {
@@ -206,29 +184,5 @@ extension PhotoLibraryViewController : UICollectionViewDataSource {
 extension PhotoLibraryViewController : UICollectionViewDelegateFlowLayout {
     public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         onSelectionComplete?(itemAtIndexPath(indexPath))
-    }
-}
-
-extension PhotoLibraryViewController: PHPhotoLibraryAvailabilityObserver,PHPickerViewControllerDelegate {
-   
-    public func photoLibraryDidBecomeUnavailable(_ photoLibrary: PHPhotoLibrary) {
-        
-    }
-    
-    @available(iOS 14.0, *)
-    public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true, completion: nil)
-        for result in results {
-            if let assetIdentifier = result.assetIdentifier {
-                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil)
-                if let asset = fetchResult.firstObject {
-                   let exitIndex =  self.assets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier})
-                    if exitIndex == nil {
-                        self.assets.append(asset)
-                    }
-                }
-            }
-        }
-        self.collectionView.reloadData()
     }
 }
