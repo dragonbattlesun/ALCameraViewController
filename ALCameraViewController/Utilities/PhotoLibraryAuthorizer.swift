@@ -43,6 +43,9 @@ class PhotoLibraryAuthorizer {
             }
             break
         case .limited:
+            DispatchQueue.main.async {
+                self.completion(nil)
+            }
             break
         @unknown default:
             break

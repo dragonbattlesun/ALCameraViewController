@@ -40,6 +40,8 @@ class ViewController: UIViewController {
         let libraryViewController = CameraViewController.imagePickerViewController() { [weak self] image, asset in
             self?.imageView.image = image
             self?.dismiss(animated: true, completion: nil)
+        } close: {
+            
         }
         libraryViewController.modalPresentationStyle = .fullScreen
         present(libraryViewController, animated: true, completion: nil)

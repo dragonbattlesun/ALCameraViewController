@@ -30,7 +30,7 @@ internal class PermissionsView: UIView {
     }
     
     func configureInView(_ view: UIView, title: String, description: String, completion: @escaping ButtonAction) {
-        let closeButton = UIButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
+        let closeButton = UIButton(frame: CGRect(x: 20, y: 0, width: 44, height: 44))
         
         view.addSubview(self)
         addSubview(closeButton)
@@ -39,42 +39,35 @@ internal class PermissionsView: UIView {
         descriptionLabel.text = description
         
         closeButton.action = completion
-        closeButton.setImage(UIImage(named: "retakeButton", in: CameraGlobals.shared.bundle, compatibleWith: nil), for: UIControl.State())
+        closeButton.setImage(UIImage(named: "close_nav_white", in: CameraGlobals.shared.bundle, compatibleWith: nil), for: UIControl.State())
         closeButton.sizeToFit()
-        
-        let size = view.frame.size
-        let closeSize = closeButton.frame.size
-        let closeX = horizontalPadding
-        let closeY = size.height - (closeSize.height + verticalPadding)
-        
-        closeButton.frame.origin = CGPoint(x: closeX, y: closeY)
+        let safeAreaInsets = safeAreaInsets
+        let closeY = safeAreaInsets.top + 10
+        closeButton.frame.origin = CGPoint(x: 20, y: closeY)
     }
     
     func commonInit() {
         
         backgroundColor = UIColor.black
-        
         titleLabel.textColor = UIColor.white
         titleLabel.numberOfLines = 0
         titleLabel.textAlignment = NSTextAlignment.center
-        titleLabel.font = UIFont(name: "AppleSDGothicNeo-Light", size: 22)
+        titleLabel.font = UIFont.systemFont(ofSize: 18, weight: .medium)
         titleLabel.text = localizedString("permissions.title")
         
         descriptionLabel.textColor = UIColor.lightGray
         descriptionLabel.numberOfLines = 0
         descriptionLabel.textAlignment = NSTextAlignment.center
-        descriptionLabel.font = UIFont(name: "AppleSDGothicNeo-Regular", size: 16)
+        descriptionLabel.font = UIFont.systemFont(ofSize: 14)
         descriptionLabel.text = localizedString("permissions.description")
         
         let icon = UIImage(named: "permissionsIcon", in: CameraGlobals.shared.bundle, compatibleWith: nil)!
         iconView.image = icon
-        
-        settingsButton.contentEdgeInsets = UIEdgeInsets.init(top: 6, left: 12, bottom: 6, right: 12)
+        settingsButton.contentEdgeInsets = UIEdgeInsets.init(top: 10, left: 20, bottom: 10, right: 20)
         settingsButton.setTitle(localizedString("permissions.settings"), for: UIControl.State())
         settingsButton.setTitleColor(UIColor.white, for: UIControl.State())
-        settingsButton.layer.cornerRadius = 4
-        settingsButton.titleLabel?.font = UIFont(name: "AppleSDGothicNeo-Regular", size: 14)
-        settingsButton.backgroundColor = UIColor(red: 52.0/255.0, green: 183.0/255.0, blue: 250.0/255.0, alpha: 1)
+        settingsButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        settingsButton.backgroundColor = UIColor(red: 52.0/255.0, green: 120.0/255.0, blue: 246.0/255.0, alpha: 1)
         settingsButton.addTarget(self, action: #selector(PermissionsView.openSettings), for: UIControl.Event.touchUpInside)
         
         addSubview(iconView)
@@ -101,7 +94,7 @@ internal class PermissionsView: UIView {
         let settingsSize = settingsButton.sizeThatFits(constrainedTextSize)
         
         let iconX = frame.width/2 - iconSize.width/2
-        let iconY: CGFloat = frame.height/2 - (iconSize.height + verticalSpacing + verticalSpacing + titleSize.height + verticalSpacing + descriptionSize.height)/2;
+        let iconY: CGFloat = frame.height/3 - (iconSize.height + verticalSpacing + verticalSpacing + titleSize.height + verticalSpacing + descriptionSize.height)/2;
         
         iconView.frame = CGRect(x: iconX, y: iconY, width: iconSize.width, height: iconSize.height)
         
@@ -116,8 +109,9 @@ internal class PermissionsView: UIView {
         descriptionLabel.frame = CGRect(x: descriptionX, y: descriptionY, width: descriptionSize.width, height: descriptionSize.height)
         
         let settingsX = frame.width/2 - settingsSize.width/2
-        let settingsY = descriptionY + descriptionSize.height + verticalSpacing
+        let settingsY = descriptionY + descriptionSize.height + verticalSpacing * 3
         
         settingsButton.frame = CGRect(x: settingsX, y: settingsY, width: settingsSize.width, height: settingsSize.height)
+        settingsButton.layer.cornerRadius = settingsButton.frame.size.height / 2.0
     }
 }

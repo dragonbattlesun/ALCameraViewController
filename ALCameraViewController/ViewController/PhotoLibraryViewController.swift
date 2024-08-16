@@ -8,52 +8,93 @@
 
 import UIKit
 import Photos
+import PhotosUI
 
 internal let ImageCellIdentifier = "ImageCell"
 
 internal let defaultItemSpacing: CGFloat = 1
 
 public typealias PhotoLibraryViewSelectionComplete = (PHAsset?) -> Void
+public typealias closeCompleted = () -> Void
 
 public class PhotoLibraryViewController: UIViewController {
     
-    internal var assets: PHFetchResult<PHAsset>? = nil
-    
+    internal var assets: [PHAsset] = []
+
     public var onSelectionComplete: PhotoLibraryViewSelectionComplete?
-    
-    private lazy var collectionView: UICollectionView = {
-        let layout = UICollectionViewFlowLayout()
-        
-        layout.itemSize = CameraGlobals.shared.photoLibraryThumbnailSize
-        layout.minimumInteritemSpacing = defaultItemSpacing
-        layout.minimumLineSpacing = defaultItemSpacing
-        layout.sectionInset = UIEdgeInsets.zero
-      
-        let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
-        collectionView.backgroundColor = UIColor.clear
-        return collectionView
-    }()
-    
+    public var closeBlock: closeCompleted?
+
     public override func viewDidLoad() {
         super.viewDidLoad()
         
         setNeedsStatusBarAppearanceUpdate()
         
-        let buttonImage = UIImage(named: "libraryCancel", in: CameraGlobals.shared.bundle, compatibleWith: nil)?.withRenderingMode(UIImage.RenderingMode.alwaysOriginal)
+        let buttonImage = UIImage(named: "close_nav_white", in: CameraGlobals.shared.bundle, compatibleWith: nil)?.withRenderingMode(UIImage.RenderingMode.alwaysOriginal)
         
         navigationItem.leftBarButtonItem = UIBarButtonItem(image: buttonImage,
                                                            style: UIBarButtonItem.Style.plain,
                                                            target: self,
                                                            action: #selector(dismissLibrary))
-        
-        view.backgroundColor = UIColor(white: 0.2, alpha: 1)
+        navigationItem.title = "Photo album"
+        view.backgroundColor = .black
         view.addSubview(collectionView)
-        
-        _ = ImageFetcher()
+        configCollectionViewConstraint()
+        PHPhotoLibrary.shared().register(self)
+        checkPhotoLibraryAuthorization()
+        ImageFetcher()
             .onFailure(onFailure)
             .onSuccess(onSuccess)
             .fetch()
+    }
+    
+    /**
+     * If the device is portrait, pin the SwapButton on the
+     * right side of the CameraButton.
+     * If landscape, pin the SwapButton on the top of the
+     * CameraButton.
+     */
+    func configCollectionViewConstraint() {
+        
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Set constraints for topMaskView
+        let leftConstraint = NSLayoutConstraint(
+            item: collectionView,
+            attribute: .left,
+            relatedBy: .equal,
+            toItem: view,
+            attribute: .left,
+            multiplier: 1.0,
+            constant: 0
+        )
+        let trailingConstraint = NSLayoutConstraint(
+            item: collectionView,
+            attribute: .trailing,
+            relatedBy: .equal,
+            toItem: view,
+            attribute: .trailing,
+            multiplier: 1.0,
+            constant: 0
+        )
+        let topConstraint = NSLayoutConstraint(
+            item: collectionView,
+            attribute: .top,
+            relatedBy: .equal,
+            toItem: view.safeAreaLayoutGuide,
+            attribute: .top,
+            multiplier: 1.0,
+            constant: 0
+        )
+        let bottomConstraint = NSLayoutConstraint(
+            item: collectionView,
+            attribute: .bottom,
+            relatedBy: .equal,
+            toItem: view.safeAreaLayoutGuide,
+            attribute: .bottom,
+            multiplier: 1.0,
+            constant: 0  // Fixed height of 116
+        )
+        view.addConstraints([topConstraint, trailingConstraint, leftConstraint, bottomConstraint])
     }
     
     public override func viewWillLayoutSubviews() {
@@ -72,12 +113,35 @@ public class PhotoLibraryViewController: UIViewController {
         inViewController.present(navigationController, animated: animated, completion: nil)
     }
     
+    func checkPhotoLibraryAuthorization() {
+        if #available(iOS 14, *) {
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            if status == .limited {
+                showPhotoPicker(from: self)
+            }
+        }
+    }
+    
+    @available(iOS 14, *)
+    func showPhotoPicker(from viewController: UIViewController) {
+        var config = PHPickerConfiguration(photoLibrary: PHPhotoLibrary.shared())
+        config.selectionLimit = 0 // Allows unlimited selection
+        config.filter = .images // Show only images
+
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = viewController as? PHPickerViewControllerDelegate
+        viewController.present(picker, animated: true, completion: nil)
+    }
+    
     @objc public func dismissLibrary() {
         onSelectionComplete?(nil)
+        if let block = self.closeBlock {
+            block()
+        }
     }
     
     private func onSuccess(_ photos: PHFetchResult<PHAsset>) {
-        assets = photos
+        assets = photos.objects(at: IndexSet(integersIn: 0..<photos.count))
         configureCollectionView()
     }
     
@@ -94,8 +158,23 @@ public class PhotoLibraryViewController: UIViewController {
         collectionView.dataSource = self
     }
     
+    
+    private lazy var collectionView: UICollectionView = {
+        let layout = UICollectionViewFlowLayout()
+        
+        layout.itemSize = CameraGlobals.shared.photoLibraryThumbnailSize
+        layout.minimumInteritemSpacing = defaultItemSpacing
+        layout.minimumLineSpacing = defaultItemSpacing
+        layout.sectionInset = UIEdgeInsets.zero
+      
+        let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.backgroundColor = UIColor.clear
+        return collectionView
+    }()
+    
     internal func itemAtIndexPath(_ indexPath: IndexPath) -> PHAsset? {
-        return assets?[(indexPath as NSIndexPath).row]
+        return assets[indexPath.row]
     }
     
     deinit {
@@ -107,7 +186,7 @@ public class PhotoLibraryViewController: UIViewController {
 // MARK: - UICollectionViewDataSource -
 extension PhotoLibraryViewController : UICollectionViewDataSource {
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return assets?.count ?? 0
+        return assets.count
     }
 
     @objc(collectionView:willDisplayCell:forItemAtIndexPath:) public func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
@@ -127,5 +206,29 @@ extension PhotoLibraryViewController : UICollectionViewDataSource {
 extension PhotoLibraryViewController : UICollectionViewDelegateFlowLayout {
     public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         onSelectionComplete?(itemAtIndexPath(indexPath))
+    }
+}
+
+extension PhotoLibraryViewController: PHPhotoLibraryAvailabilityObserver,PHPickerViewControllerDelegate {
+   
+    public func photoLibraryDidBecomeUnavailable(_ photoLibrary: PHPhotoLibrary) {
+        
+    }
+    
+    @available(iOS 14.0, *)
+    public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true, completion: nil)
+        for result in results {
+            if let assetIdentifier = result.assetIdentifier {
+                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], options: nil)
+                if let asset = fetchResult.firstObject {
+                   let exitIndex =  self.assets.firstIndex(where: { $0.localIdentifier == asset.localIdentifier})
+                    if exitIndex == nil {
+                        self.assets.append(asset)
+                    }
+                }
+            }
+        }
+        self.collectionView.reloadData()
     }
 }

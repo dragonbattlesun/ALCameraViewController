@@ -14,14 +14,14 @@ public typealias CameraViewCompletion = (UIImage?, PHAsset?) -> Void
 
 public extension CameraViewController {
     /// Provides an image picker wrapped inside a UINavigationController instance
-    class func imagePickerViewController(completion: @escaping CameraViewCompletion) -> UINavigationController {
+    class func imagePickerViewController(completion: @escaping CameraViewCompletion,close:@escaping closeCompleted) -> UINavigationController {
         let imagePicker = PhotoLibraryViewController()
         let navigationController = UINavigationController(rootViewController: imagePicker)
-        
         navigationController.navigationBar.barTintColor = UIColor.black
         navigationController.navigationBar.barStyle = UIBarStyle.black
-        navigationController.modalTransitionStyle = UIModalTransitionStyle.crossDissolve
-
+        imagePicker.modalPresentationStyle = .fullScreen
+        navigationController.modalPresentationStyle = .fullScreen
+        imagePicker.closeBlock = close
         imagePicker.onSelectionComplete = { [weak imagePicker] asset in
             if let asset = asset {
                 SingleImageFetcher()
@@ -43,7 +43,7 @@ public extension CameraViewController {
     }
 }
 
-open class CameraViewController: UIViewController {
+@objcMembers public class CameraViewController: UIViewController {
     
     var didUpdateViews = false
     var animationRunning = false
@@ -102,7 +102,7 @@ open class CameraViewController: UIViewController {
     let closeButton : UIButton = {
         let button = UIButton()
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setImage(UIImage(named: "closeButton",
+        button.setImage(UIImage(named: "close_nav_white",
                                 in: CameraGlobals.shared.bundle,
                                 compatibleWith: nil),
                         for: .normal)
@@ -257,6 +257,13 @@ open class CameraViewController: UIViewController {
         setupActions()
         checkPermissions()
         cameraView.configureZoom()
+        self.libraryButton.isHidden = true
+        self.closeButton.isHidden = true
+        self.cameraView.startomCaptureCompletion = { [weak self] in
+            self?.libraryButton.isHidden = false
+            self?.closeButton.isHidden = false
+        }
+        self.cameraView.startSession()
     }
 
     /**
@@ -264,7 +271,7 @@ open class CameraViewController: UIViewController {
      */
     open override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        cameraView.startSession()
+//        cameraView.startSession()
         addCameraObserver()
         addRotateObserver()
 
@@ -486,7 +493,6 @@ open class CameraViewController: UIViewController {
             let connection = output.connection(with: AVMediaType.video) else {
             return
         }
-        
         if connection.isEnabled {
             toggleButtons(enabled: false)
             cameraView.capturePhoto { [weak self] image in
@@ -494,44 +500,22 @@ open class CameraViewController: UIViewController {
                     self?.toggleButtons(enabled: true)
                     return
                 }
-                self?.saveImage(image: image)
+                if let completedBlock = self?.onCompletion {
+                    completedBlock(image,nil)
+                }
             }
         }
     }
     
-    internal func saveImage(image: UIImage) {
-        let spinner = showSpinner()
-        cameraView.preview.isHidden = true
-
-		if allowsLibraryAccess {
-        _ = SingleImageSaver()
-            .setImage(image)
-            .onSuccess { [weak self] asset in
-                self?.layoutCameraResult(asset: asset)
-                self?.hideSpinner(spinner)
-            }
-            .onFailure { [weak self] error in
-                self?.toggleButtons(enabled: true)
-                self?.showNoPermissionsView(library: true)
-                self?.cameraView.preview.isHidden = false
-                self?.hideSpinner(spinner)
-            }
-            .save()
-		} else {
-			layoutCameraResult(uiImage: image)
-			hideSpinner(spinner)
-		}
-    }
-	
     internal func close() {
         onCompletion?(nil, nil)
         onCompletion = nil
     }
     
     internal func showLibrary() {
+        self.cameraView.stopSession()
         let imagePicker = CameraViewController.imagePickerViewController() { [weak self] image, asset in
             defer {
-                self?.cameraView.startSession()
                 self?.dismiss(animated: true, completion: nil)
             }
 
@@ -540,10 +524,11 @@ open class CameraViewController: UIViewController {
             }
 
             self?.onCompletion?(image, asset)
+        } close: {
+            self.cameraView.startSession()
         }
         
         present(imagePicker, animated: true) { [weak self] in
-            self?.cameraView.stopSession()
         }
     }
     
@@ -553,8 +538,8 @@ open class CameraViewController: UIViewController {
         guard let device = cameraView.device else {
             return
         }
-  
-        let image = UIImage(named: flashImage(device.flashMode),
+        let  flashMode = AVCapturePhotoSettings().flashMode
+        let image = UIImage(named: flashImage(flashMode),
                             in: CameraGlobals.shared.bundle,
                             compatibleWith: nil)
         

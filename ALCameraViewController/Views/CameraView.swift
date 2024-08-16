@@ -8,8 +8,10 @@ public class CameraView: UIView {
     var device: AVCaptureDevice!
     var imageOutput: AVCapturePhotoOutput!
     var preview: AVCaptureVideoPreviewLayer!
+    var startomCaptureCompletion: (() -> Void)?
     
     private var completion: ((UIImage?) -> Void)?
+
     public var currentPosition = CameraGlobals.shared.defaultCameraPosition
     private var currentFlashMode: AVCaptureDevice.FlashMode = .off
     
@@ -39,18 +41,22 @@ public class CameraView: UIView {
             session.addInput(input)
         }
 
-
         if session.canAddInput(input) {
             session.addInput(input)
         }
-
         imageOutput = AVCapturePhotoOutput()
         session.addOutput(imageOutput)
-
+        session.commitConfiguration()
         DispatchQueue.global(qos: .background).async { [weak self] in
             if let isRunning = self?.session?.isRunning {
                 if !isRunning {
                     self?.session?.startRunning()
+                    // 切换回主线程处理UI更新或后续操作
+                    DispatchQueue.main.async {
+                        if let completion = self?.startomCaptureCompletion {
+                            completion()
+                        }
+                    }
                 }
             }
         }
@@ -59,19 +65,21 @@ public class CameraView: UIView {
     }
     
     public func stopSession() {
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            if let isRunning = self?.session?.isRunning {
-                if isRunning {
-                    self?.session?.stopRunning()
-                    self?.session = nil
+        if self.session.isRunning {
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                if let isRunning = self?.session?.isRunning {
+                    if isRunning {
+                        self?.session?.stopRunning()
+                        self?.session = nil
+                    }
                 }
             }
+            preview?.removeFromSuperlayer()
+            input = nil
+            imageOutput = nil
+            preview = nil
+            device = nil
         }
-        preview?.removeFromSuperlayer()
-        input = nil
-        imageOutput = nil
-        preview = nil
-        device = nil
     }
     
     public override func layoutSubviews() {
@@ -128,7 +136,7 @@ public class CameraView: UIView {
             mediaType: .video,
             position: .unspecified
         )
-        
+
         return discoverySession.devices.first { $0.position == position }
     }
     
@@ -173,7 +181,6 @@ public class CameraView: UIView {
         guard let device = device, device.hasFlash else {
             return
         }
-        
         do {
             try device.lockForConfiguration()
             switch currentFlashMode {
@@ -186,6 +193,7 @@ public class CameraView: UIView {
             default:
                 currentFlashMode = .off
             }
+            AVCapturePhotoSettings().flashMode = currentFlashMode
             device.unlockForConfiguration()
         } catch {
             print("Error locking device for configuration: \(error.localizedDescription)")

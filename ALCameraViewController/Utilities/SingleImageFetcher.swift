@@ -49,7 +49,7 @@ public class SingleImageFetcher {
         return self
     }
     
-    public func fetch() -> Self {
+    public func fetch() {
         _ = PhotoLibraryAuthorizer { error in
             if error == nil {
                 self._fetch()
@@ -57,7 +57,6 @@ public class SingleImageFetcher {
                 self.failure?(error!)
             }
         }
-        return self
     }
     
     private func _fetch() {

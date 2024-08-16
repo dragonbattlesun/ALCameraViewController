@@ -19,7 +19,7 @@ public class ImageFetcher {
     
     private var authRequested = false
     private let errorDomain = "com.zero.imageFetcher"
-    
+
     let libraryQueue = DispatchQueue(label: "com.zero.ALCameraViewController.LibraryQueue");
     
     public init() { }
@@ -34,15 +34,14 @@ public class ImageFetcher {
         return self
     }
     
-    public func fetch() -> Self {
-        _ = PhotoLibraryAuthorizer { error in
+    public func fetch() {
+       _ = PhotoLibraryAuthorizer { error in
             if error == nil {
                 self.onAuthorized()
             } else {
                 self.failure?(error!)
             }
         }
-        return self
     }
     
     private func onAuthorized() {

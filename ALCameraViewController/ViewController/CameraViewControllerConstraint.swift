@@ -416,7 +416,7 @@ extension CameraViewController {
     func configLibraryButtonConstraint() {
 
         // Set constraints for topMaskView
-        let topConstraint = NSLayoutConstraint(
+        let centerConstraint = NSLayoutConstraint(
             item: libraryButton,
             attribute: .centerY,
             relatedBy: .equal,
@@ -425,7 +425,7 @@ extension CameraViewController {
             multiplier: 1.0,
             constant: 0
         )
-        let trailingConstraint = NSLayoutConstraint(
+        let leadingConstraint = NSLayoutConstraint(
             item: libraryButton,
             attribute: .leading,
             relatedBy: .equal,
@@ -453,7 +453,7 @@ extension CameraViewController {
             constant: 44  // Fixed height of 116
         )
 
-        bottomMaskView.addConstraints([topConstraint, trailingConstraint, heightConstraint, widthConstraint])
+        bottomMaskView.addConstraints([leadingConstraint,centerConstraint, heightConstraint, widthConstraint])
     }
     
     
@@ -478,7 +478,7 @@ extension CameraViewController {
     func configFlashButtonConstraint() {
 
         // Set constraints for topMaskView
-        let trailingConstraint = NSLayoutConstraint(
+        let leadingConstraint = NSLayoutConstraint(
             item: flashButton,
             attribute: .leading,
             relatedBy: .equal,
@@ -515,7 +515,7 @@ extension CameraViewController {
             constant: 30  // Fixed height of 116
         )
 
-        topMaskView.addConstraints([trailingConstraint, centerConstraint, heightConstraint, widthConstraint])
+        topMaskView.addConstraints([leadingConstraint, centerConstraint, heightConstraint, widthConstraint])
     }
 
 }
