@@ -11,7 +11,8 @@ public class CameraView: UIView {
     var startomCaptureCompletion: (() -> Void)?
     var photoSettings: AVCapturePhotoSettings = AVCapturePhotoSettings()
     var currentFlashMode: AVCaptureDevice.FlashMode = .off
-    
+    let cameraQueue = DispatchQueue(label: "com.zero.ALCameraViewController.Queue")
+
     private var completion: ((UIImage?) -> Void)?
     public var currentPosition = CameraGlobals.shared.defaultCameraPosition
     
@@ -47,7 +48,7 @@ public class CameraView: UIView {
         imageOutput = AVCapturePhotoOutput()
         session.addOutput(imageOutput)
         session.commitConfiguration()
-        DispatchQueue.global(qos: .background).async { [weak self] in
+        cameraQueue.sync { [weak self] in
             if let isRunning = self?.session?.isRunning {
                 if !isRunning {
                     self?.session?.startRunning()
@@ -60,25 +61,26 @@ public class CameraView: UIView {
                 }
             }
         }
+       
         createPreview()
         rotatePreview()
     }
     
     public func stopSession() {
         if self.session.isRunning {
-            DispatchQueue.global(qos: .background).async { [weak self] in
+            cameraQueue.sync { [weak self] in
                 if let isRunning = self?.session?.isRunning {
                     if isRunning {
                         self?.session?.stopRunning()
                         self?.session = nil
                     }
                 }
+                self?.preview?.removeFromSuperlayer()
+                self?.input = nil
+                self?.imageOutput = nil
+                self?.preview = nil
+                self?.device = nil
             }
-            preview?.removeFromSuperlayer()
-            input = nil
-            imageOutput = nil
-            preview = nil
-            device = nil
         }
     }
     
